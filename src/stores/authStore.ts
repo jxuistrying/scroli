@@ -1,18 +1,13 @@
 import { create } from 'zustand';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-}
+import { User } from '@supabase/supabase-js';
 
 interface AuthState {
   user: User | null;
   hasCompletedOnboarding: boolean;
   setUser: (user: User | null) => void;
   setHasCompletedOnboarding: (completed: boolean) => void;
-  completeOnboarding: (user: User) => void;
+  completeOnboarding: () => void;
+  reset: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -20,5 +15,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   hasCompletedOnboarding: false,
   setUser: (user) => set({ user }),
   setHasCompletedOnboarding: (completed) => set({ hasCompletedOnboarding: completed }),
-  completeOnboarding: (user) => set({ user, hasCompletedOnboarding: true }),
+  completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+  reset: () => set({ user: null, hasCompletedOnboarding: false }),
 }));

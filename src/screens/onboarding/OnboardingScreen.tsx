@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
-import { RootStackParamList } from '../../navigation/types';
 import { WelcomeStep } from './WelcomeStep';
 import { GoalStep } from './GoalStep';
 import { StakeStep } from './StakeStep';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/authStore';
-
-type OnboardingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../services/supabase';
+import { showAlert } from '../../utils/alert';
 
 export const OnboardingScreen: React.FC = () => {
-  const navigation = useNavigation<OnboardingNavigationProp>();
+  const { user } = useAuth();
   const { completeOnboarding } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -22,20 +20,30 @@ export const OnboardingScreen: React.FC = () => {
   const totalSteps = steps.length;
   const CurrentStepComponent = steps[currentStep];
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Complete onboarding
-      completeOnboarding({
-        id: '1',
-        name: 'User',
-        email: 'user@example.com',
-      });
-      (navigation as any).reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      if (user) {
+        try {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ has_completed_onboarding: true })
+            .eq('id', user.id);
+
+          if (error) {
+            console.error('Error saving onboarding status:', error);
+            showAlert('Wait...', 'We couldn\'t save your progress. Please try again.');
+            return;
+          }
+        } catch (err) {
+          console.error('Error in onboarding completion:', err);
+        }
+      }
+
+      // Complete onboarding in local state — RootNavigator will
+      // automatically switch to Main now that it's persisted/synced
+      completeOnboarding();
     }
   };
 
