@@ -1,57 +1,63 @@
-import React from 'react';
+import * as React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
 export const App = () => {
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Scroly Dashboard</Text>
-          <Text style={styles.subtitle}>Minimal Test Version</Text>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="dark" />
+          <ScrollView contentContainerStyle={styles.content}>
+            <Text style={styles.title}>Scroly Dashboard</Text>
+            <Text style={styles.subtitle}>Minimal Test Version</Text>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Current Usage</Text>
-            <Text style={styles.bigNumber}>2.3</Text>
-            <Text style={styles.label}>hours today</Text>
-          </View>
-
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBackground}>
-              <View style={[styles.progressBar, { width: 138 }]} />
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Current Usage</Text>
+              <Text style={styles.bigNumber}>2.3</Text>
+              <Text style={styles.label}>hours today</Text>
             </View>
-            <View style={styles.progressLabels}>
-              <Text style={styles.progressLabel}>0</Text>
-              <Text style={styles.progressLabel}>3h goal</Text>
-            </View>
-          </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Status</Text>
-            <View style={styles.row}>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Screen Time</Text>
-                <Text style={styles.statValue}>2h 23m</Text>
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBackground}>
+                <View style={[styles.progressBar, { width: 138 }]} />
               </View>
-              <View style={styles.divider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>At Stake</Text>
-                <Text style={[styles.statValue, styles.purple]}>$5</Text>
+              <View style={styles.progressLabels}>
+                <Text style={styles.progressLabel}>0</Text>
+                <Text style={styles.progressLabel}>3h goal</Text>
               </View>
             </View>
-          </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Streak</Text>
-            <Text style={styles.emoji}>🔥🔥🔥</Text>
-            <Text style={styles.label}>6 days</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </SafeAreaProvider>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Status</Text>
+              <View style={styles.row}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Screen Time</Text>
+                  <Text style={styles.statValue}>2h 23m</Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>At Stake</Text>
+                  <Text style={[styles.statValue, styles.purple]}>$5</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Streak</Text>
+              <Text style={styles.emoji}>🔥🔥🔥</Text>
+              <Text style={styles.label}>6 days</Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 };
 
