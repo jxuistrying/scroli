@@ -9,6 +9,8 @@ export type MainTabParamList = {
 };
 
 export type RootStackParamList = {
+  SignIn: undefined;
+  SignUp: undefined;
   Onboarding: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
   ImpactFlow: undefined;

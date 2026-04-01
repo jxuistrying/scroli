@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
+import { useAuth } from '../../contexts/AuthContext';
+import { useAuthStore } from '../../stores/authStore';
 
 interface SettingItemProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -27,6 +29,27 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon, title, subtitle, onPres
 };
 
 export const SettingsScreen: React.FC = () => {
+  const { signOut } = useAuth();
+  const { reset } = useAuthStore();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            reset();
+            await signOut();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -106,7 +129,7 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
 
-        <Pressable style={styles.logoutButton} onPress={() => {}}>
+        <Pressable style={styles.logoutButton} onPress={handleSignOut}>
           <Text style={styles.logoutText}>Log Out</Text>
         </Pressable>
       </ScrollView>
