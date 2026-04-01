@@ -1,6 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { showAlert } from '../utils/alert';
+
+const getErrorMessage = (errorMsg: string): string => {
+  if (errorMsg.includes('User already registered')) {
+    return 'An account with this email already exists. Try signing in instead.';
+  }
+  if (errorMsg.includes('Password should be at least')) {
+    return 'Password must be at least 6 characters long.';
+  }
+  if (errorMsg.includes('Unable to validate email') || errorMsg.includes('invalid')) {
+    return 'Please enter a valid email address.';
+  }
+  if (errorMsg.includes('rate limit') || errorMsg.includes('Too many requests')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  return errorMsg;
+};
 
 export const SignUpScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -9,16 +26,30 @@ export const SignUpScreen = ({ navigation }: any) => {
   const { signUp } = useAuth();
 
   const handleSignUp = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    const { error } = await signUp(email, password);
-    setLoading(false);
-    if (error) {
-      Alert.alert('Sign Up Error', error.message);
-    } else {
-      Alert.alert('Sign Up Success', 'Please check your email for verification.');
-      navigation.goBack();
+    if (!email.trim()) {
+      showAlert('Missing Email', 'Please enter your email address.');
+      return;
     }
+    if (!password) {
+      showAlert('Missing Password', 'Please enter a password.');
+      return;
+    }
+    if (password.length < 6) {
+      showAlert('Weak Password', 'Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await signUp(email.trim(), password);
+    setLoading(false);
+
+    if (error) {
+      showAlert('Sign Up Failed', getErrorMessage(error.message));
+    }
+    // If email confirmation is off, user is auto-signed in and
+    // RootNavigator will redirect to Onboarding automatically.
+    // If email confirmation is on, show a message:
+    // Alert.alert('Check Your Email', 'We sent a confirmation link to your email.');
   };
 
   return (
@@ -33,17 +64,19 @@ export const SignUpScreen = ({ navigation }: any) => {
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
+        editable={!loading}
       />
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder="Password (min 6 characters)"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        editable={!loading}
       />
 
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleSignUp}
         disabled={loading}
       >
@@ -57,6 +90,7 @@ export const SignUpScreen = ({ navigation }: any) => {
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={styles.link}
+        disabled={loading}
       >
         <Text style={styles.linkText}>Already have an account? Sign In</Text>
       </TouchableOpacity>
@@ -98,6 +132,9 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#FFF',

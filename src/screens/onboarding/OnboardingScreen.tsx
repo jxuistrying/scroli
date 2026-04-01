@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
-import { RootStackParamList } from '../../navigation/types';
 import { WelcomeStep } from './WelcomeStep';
 import { GoalStep } from './GoalStep';
 import { StakeStep } from './StakeStep';
 import { Button } from '../../components/ui/Button';
 import { useAuthStore } from '../../stores/authStore';
 
-type OnboardingNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
-
 export const OnboardingScreen: React.FC = () => {
-  const navigation = useNavigation<OnboardingNavigationProp>();
   const { completeOnboarding } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -26,16 +20,9 @@ export const OnboardingScreen: React.FC = () => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Complete onboarding
-      completeOnboarding({
-        id: '1',
-        name: 'User',
-        email: 'user@example.com',
-      });
-      (navigation as any).reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      // Complete onboarding — RootNavigator will automatically
+      // switch to Main once hasCompletedOnboarding becomes true
+      completeOnboarding();
     }
   };
 

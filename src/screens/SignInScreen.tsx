@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useAuth } from '../hooks/useAuth';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { showAlert } from '../utils/alert';
+
+const getErrorMessage = (errorMsg: string): string => {
+  if (errorMsg.includes('Invalid login credentials')) {
+    return 'Incorrect email or password. Please try again.';
+  }
+  if (errorMsg.includes('Email not confirmed')) {
+    return 'Please check your email and confirm your account first.';
+  }
+  if (errorMsg.includes('Too many requests') || errorMsg.includes('rate limit')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  return errorMsg;
+};
 
 export const SignInScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -9,15 +23,23 @@ export const SignInScreen = ({ navigation }: any) => {
   const { signIn } = useAuth();
 
   const handleSignIn = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    const { error } = await signIn(email, password);
-    setLoading(false);
-    if (error) {
-      Alert.alert('Sign In Error', error.message);
-    } else {
-      // Navigation will be handled by the auth state change in useAuth
+    if (!email.trim()) {
+      showAlert('Missing Email', 'Please enter your email address.');
+      return;
     }
+    if (!password) {
+      showAlert('Missing Password', 'Please enter your password.');
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await signIn(email.trim(), password);
+    setLoading(false);
+
+    if (error) {
+      showAlert('Sign In Failed', getErrorMessage(error.message));
+    }
+    // Navigation handled automatically by RootNavigator when session changes
   };
 
   return (
@@ -32,6 +54,7 @@ export const SignInScreen = ({ navigation }: any) => {
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
+        editable={!loading}
       />
       <TextInput
         style={styles.input}
@@ -39,10 +62,11 @@ export const SignInScreen = ({ navigation }: any) => {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        editable={!loading}
       />
 
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleSignIn}
         disabled={loading}
       >
@@ -56,6 +80,7 @@ export const SignInScreen = ({ navigation }: any) => {
       <TouchableOpacity
         onPress={() => navigation.navigate('SignUp')}
         style={styles.link}
+        disabled={loading}
       >
         <Text style={styles.linkText}>Don't have an account? Sign Up</Text>
       </TouchableOpacity>
@@ -97,6 +122,9 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: '#FFF',
