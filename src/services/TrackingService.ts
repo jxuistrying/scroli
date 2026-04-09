@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { PaymentService } from './PaymentService';
 
 export type DayResult = 'success' | 'failure' | 'pending';
 
@@ -87,6 +88,22 @@ export const TrackingService = {
       .from('daily_records')
       .update({ status })
       .eq('id', data.id);
+
+    // On failure, charge the user's saved payment method
+    if (status === 'failure') {
+      try {
+        const balance = await TrackingService.getWalletBalance(userId);
+        if (balance > 0) {
+          const charged = await PaymentService.confirmCharge(userId, balance);
+          if (charged) {
+            await TrackingService.logTransaction(userId, balance, 'charge');
+          }
+        }
+      } catch (chargeErr) {
+        console.error('Failed to process failure charge:', chargeErr);
+        // Don't throw — the day result should still be saved even if charge fails
+      }
+    }
 
     return status;
   },
