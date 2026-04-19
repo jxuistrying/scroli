@@ -8,43 +8,56 @@ import { Button } from '../../components/ui/Button';
 import { LoadingView } from '../../components/ui/LoadingView';
 import { theme } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOnboardingStore } from '../../stores/onboardingStore';
 import { TrackingService, DayResult } from '../../services/TrackingService';
-import { MAX_DAILY_HOURS } from '../../utils/constants';
 import { supabase } from '../../services/supabase';
+import { getCharityImpactMessage } from '../../utils/charityImpact';
 
 export const ImpactFlowScreen: React.FC = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { stakeAmount } = useOnboardingStore();
+
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const [goalHours, setGoalHours] = useState(MAX_DAILY_HOURS);
+  const [goalHours, setGoalHours] = useState(3);
   const [actualHours, setActualHours] = useState(0);
-  const [stakeAmount, setStakeAmount] = useState(5);
   const [dayResult, setDayResult] = useState<DayResult>('pending');
   const [charityName, setCharityName] = useState<string | null>(null);
+  const [currentStreak, setCurrentStreak] = useState(0);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
 
     const load = async () => {
       try {
-        const [goal, balance, result, profileRes] = await Promise.all([
+        const [goal, result, profileRes, records] = await Promise.all([
           TrackingService.getActiveGoal(user.id),
-          TrackingService.getWalletBalance(user.id),
           TrackingService.evaluateDayResult(user.id),
           supabase.from('profiles').select('charities(name)').eq('id', user.id).single(),
+          TrackingService.getRecentRecords(user.id, 35),
         ]);
+
+        if (goal) setGoalHours(goal.daily_limit_minutes / 60);
+        setDayResult(result);
         setCharityName((profileRes.data?.charities as any)?.name ?? null);
 
         const today = new Date().toISOString().split('T')[0];
-        const records = await TrackingService.getRecentRecords(user.id, 1);
         const todayRecord = records.find(r => r.date === today);
-
-        if (goal) setGoalHours(goal.daily_limit_minutes / 60);
         if (todayRecord) setActualHours(todayRecord.duration_minutes / 60);
-        setStakeAmount(Math.round(balance / 100));
-        setDayResult(result);
+
+        // Compute streak
+        const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+        let streak = 0;
+        for (const r of sorted) {
+          if (r.date === today) continue; // exclude today (just evaluated)
+          if (r.status === 'success') streak++;
+          else break;
+        }
+        // If today is a success, include it
+        if (result === 'success') streak += 1;
+        setCurrentStreak(streak);
       } catch (err) {
         console.error('ImpactFlow load error:', err);
       } finally {
@@ -55,16 +68,36 @@ export const ImpactFlowScreen: React.FC = () => {
     load();
   }, [user]);
 
-  const impactMessage = `Your $${stakeAmount} protected ${Math.max(1, stakeAmount * 2)} children from malaria for a month`;
+  const impactMessage = getCharityImpactMessage(charityName, stakeAmount);
 
   const renderStep = () => {
     switch (currentStep) {
       case 0:
-        return <RealityStep goalHours={goalHours} actualHours={actualHours} />;
+        return (
+          <RealityStep
+            goalHours={goalHours}
+            actualHours={actualHours}
+            dayResult={dayResult}
+          />
+        );
       case 1:
-        return <ImpactStep donationAmount={stakeAmount} impactMessage={impactMessage} charityName={charityName} />;
+        return (
+          <ImpactStep
+            donationAmount={stakeAmount}
+            impactMessage={impactMessage}
+            charityName={charityName}
+            dayResult={dayResult}
+            currentStreak={currentStreak}
+          />
+        );
       case 2:
-        return <ResetStep />;
+        return (
+          <ResetStep
+            dayResult={dayResult}
+            currentStreak={currentStreak}
+            stakeAmount={stakeAmount}
+          />
+        );
       default:
         return null;
     }
@@ -82,10 +115,7 @@ export const ImpactFlowScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        {renderStep()}
-      </View>
-
+      <View style={styles.content}>{renderStep()}</View>
       <View style={styles.footer}>
         <Button
           title={currentStep === 2 ? 'Close' : 'Next'}
@@ -99,18 +129,12 @@ export const ImpactFlowScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  content: { flex: 1 },
   footer: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.lg,
     backgroundColor: 'transparent',
   },
-  button: {
-    width: '100%',
-  },
+  button: { width: '100%' },
 });

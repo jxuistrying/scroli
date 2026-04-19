@@ -123,18 +123,22 @@ export const DashboardScreen: React.FC = () => {
       setPeriodLimitMinutes(goal?.daily_limit_minutes ?? 180);
 
       if (pt === 'weekly') {
-        const weekTotal = weekDates.reduce((sum, d) => sum + (durationMap.get(d) ?? 0), 0);
-        setPeriodUsageMinutes(weekTotal);
+        // Exclude today from DB — use live hook value instead so bar reflects current session
+        const pastTotal = weekDates
+          .filter((d) => d !== today)
+          .reduce((sum, d) => sum + (durationMap.get(d) ?? 0), 0);
+        setPeriodUsageMinutes(pastTotal + minutesToday);
       } else if (pt === 'monthly') {
         const now = new Date();
         let monthTotal = 0;
         records.forEach((r) => {
+          if (r.date === today) return; // exclude today from DB
           const d = new Date(r.date);
           if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
             monthTotal += r.duration_minutes;
           }
         });
-        setPeriodUsageMinutes(monthTotal);
+        setPeriodUsageMinutes(monthTotal + minutesToday);
       } else {
         setPeriodUsageMinutes(minutesToday);
       }

@@ -3,6 +3,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
+import { StripeWrapper } from './src/components/StripeWrapper';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useFonts,
@@ -55,15 +56,17 @@ export const App = () => {
   }
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
-          <NavigationContainer>
-            <AppContent />
-          </NavigationContainer>
-        </SafeAreaProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    <StripeWrapper>
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <SafeAreaProvider>
+            <NavigationContainer>
+              <AppContent />
+            </NavigationContainer>
+          </SafeAreaProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </StripeWrapper>
   );
 };
 

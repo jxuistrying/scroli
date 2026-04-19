@@ -3,7 +3,7 @@ import { NativeModules, Platform } from 'react-native';
 import { ScreenTimeService } from '../services/ScreenTimeService';
 
 // Simulator fallback — real device returns actual screen time
-const SIMULATOR_MOCK_MINUTES = 138; // 2h 18m
+const SIMULATOR_MOCK_MINUTES = 0;
 
 const isScreenTimeAvailable =
   Platform.OS === 'ios' && !!NativeModules.ScreenTimeModule;

@@ -7,6 +7,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { useAuthStore } from '../../stores/authStore';
+import { supabase } from '../../services/supabase';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -36,8 +38,25 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon, title, subtitle, onPres
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const { dailyGoalHours, stakeAmount } = useOnboardingStore();
+  const { setHasCompletedOnboarding } = useAuthStore();
+
+  const handleResetOnboarding = () => {
+    Alert.alert('Reset Onboarding', 'This will take you back through onboarding without signing out.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        style: 'destructive',
+        onPress: async () => {
+          if (user) {
+            await supabase.from('profiles').update({ has_completed_onboarding: false }).eq('id', user.id);
+          }
+          setHasCompletedOnboarding(false);
+        },
+      },
+    ]);
+  };
 
   const handleSignOut = () => {
     if (Platform.OS === 'web') {
@@ -102,7 +121,7 @@ export const SettingsScreen: React.FC = () => {
               icon="card-outline"
               title="Payment Method"
               subtitle="Manage your payment"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('PaymentSettings')}
             />
             <SettingItem
               icon="heart-outline"
@@ -135,6 +154,11 @@ export const SettingsScreen: React.FC = () => {
 
         <Pressable style={styles.logoutButton} onPress={handleSignOut}>
           <Text style={styles.logoutText}>Log Out</Text>
+        </Pressable>
+
+        {/* DEV ONLY — remove before App Store submission */}
+        <Pressable style={styles.devButton} onPress={handleResetOnboarding}>
+          <Text style={styles.devButtonText}>DEV: Reset Onboarding</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -213,5 +237,18 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.body,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.text.white,
+  },
+  devButton: {
+    borderWidth: 1,
+    borderColor: '#999',
+    borderStyle: 'dashed',
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  devButtonText: {
+    fontSize: theme.typography.fontSize.small,
+    color: '#999',
   },
 });

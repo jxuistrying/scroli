@@ -9,6 +9,7 @@ import { SignUpScreen } from '../screens/SignUpScreen';
 import { GoalScreen } from '../screens/settings/GoalScreen';
 import { StakeScreen } from '../screens/settings/StakeScreen';
 import { CharityScreen } from '../screens/settings/CharityScreen';
+import { PaymentScreen } from '../screens/settings/PaymentScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { useAuthStore } from '../stores/authStore';
 
@@ -38,6 +39,7 @@ export const RootNavigator: React.FC = () => {
           <Stack.Screen name="GoalSettings" component={GoalScreen} />
           <Stack.Screen name="StakeSettings" component={StakeScreen} />
           <Stack.Screen name="CharitySettings" component={CharityScreen} />
+          <Stack.Screen name="PaymentSettings" component={PaymentScreen} />
         </>
       )}
     </Stack.Navigator>

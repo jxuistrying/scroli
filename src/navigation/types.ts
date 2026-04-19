@@ -17,6 +17,7 @@ export type RootStackParamList = {
   GoalSettings: undefined;
   StakeSettings: undefined;
   CharitySettings: undefined;
+  PaymentSettings: undefined;
 };
 
 declare global {

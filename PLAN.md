@@ -1,209 +1,252 @@
-# Scroli — Remaining MVP Features
+# Scroli — Launch Plan
 
-**Status:** Core loop is working end-to-end (auth → onboarding → screen time tracking → stats → impact flow).
-**Goal:** Ship the remaining features needed for a real, payable, usable product.
+**Status:** Core loop complete. Payments wired. UI polished. Now: harden, test, and ship.
 
----
-
-## How to Use This Plan
-
-- Each feature is **self-contained** — one person owns it soup to nuts
-- Features are ordered by priority (top = most blocking)
-- If two features are in the same section, they can be worked in **parallel**
-- Avoid touching each other's files until a feature is merged
+Work through these steps top-to-bottom. Each checkpoint tells you exactly what to verify before moving on.
 
 ---
 
-## Feature 1 — Stripe Payments (Backend)
-**Owner: Co-Founder** | Files: `supabase/functions/`, `src/services/PaymentService.ts`
+## Step 1 — Run SQL Migrations
 
-The financial core of the app. Without this, no money moves.
+Everything else depends on the database being correct.
 
-### Tasks
-- [ ] Create Supabase Edge Function `create-payment-intent`
-  - Accepts `{ userId, amountCents }`, creates Stripe PaymentIntent, returns `clientSecret`
-  - Uses Stripe secret key (stored as Supabase secret, never in client)
-- [ ] Create Supabase Edge Function `save-payment-method`
-  - Stores Stripe `customerId` and `paymentMethodId` on the profile
-- [ ] Update `profiles` table: add `stripe_customer_id text`, `payment_method_id text`
-  - Run in SQL Editor: `ALTER TABLE profiles ADD COLUMN stripe_customer_id text, ADD COLUMN payment_method_id text;`
-- [ ] Replace stubbed `PaymentService.ts` with real Stripe calls via Edge Functions
-- [ ] Wire `TrackingService.evaluateDayResult` → on `'failure'` → call `PaymentService.confirmCharge`
+Open Supabase → SQL Editor and run:
 
-### Notes
-- Use `@stripe/stripe-react-native` for the card UI (re-add when ready)
-- Edge Function docs: https://supabase.com/docs/guides/functions
-- Stripe test mode keys only until app store submission
-
----
-
-## Feature 2 — Payment Setup Screen (Frontend)
-**Owner: Justin** | Files: `src/screens/onboarding/PaymentStep.tsx`, `src/navigation/`
-
-Users need to add a card before their stake means anything.
-
-### Tasks
-- [ ] Create `src/screens/onboarding/PaymentStep.tsx`
-  - Stripe `CardField` component for card entry
-  - "Your card is never charged unless you miss your goal" copy
-  - Calls `PaymentService.createPaymentMethod()` on submit
-- [ ] Add `PaymentStep` as Step 4 in `OnboardingScreen.tsx` (after StakeStep)
-- [ ] Add `PaymentMethod` item in Settings → navigates to a re-add card screen
-- [ ] Show a "No payment method" warning banner on Dashboard if card not set up
-
-### Notes
-- Requires Feature 1 (Edge Functions) to be merged first before testing end-to-end
-- Card UI: use `@stripe/stripe-react-native`'s `CardField` — it handles all validation
-
----
-
-## Feature 3 — Charity Selection (Frontend)
-**Owner: Justin** | Files: `src/screens/onboarding/CharityStep.tsx`, `src/screens/settings/CharityScreen.tsx`
-
-Users should choose where their money goes. It's a core emotional hook.
-
-### Tasks
-- [x] Create `src/screens/onboarding/CharityStep.tsx`
-- [x] `onboardingStore` updated with `charityId` / `setCharityId`
-- [x] Create `src/screens/settings/CharityScreen.tsx`
-- [x] `navigation/types.ts` updated with `CharitySettings` route
-- [x] Add `CharityStep` as Step 4 in `OnboardingScreen.tsx` (after StakeStep; move after PaymentStep once Feature 2 lands)
-- [x] Save `charity_id` to user's profile on onboarding completion
-- [x] Wire Settings → "Charity" → `CharitySettings`
-- [x] Register `CharitySettings` in `RootNavigator.tsx`
-- [ ] SQL: `ALTER TABLE profiles ADD COLUMN default_charity_id uuid references charities(id);`
-- [ ] Wire `TrackingService.logTransaction` to use user's `default_charity_id`
-
-### SQL to run first
 ```sql
-ALTER TABLE profiles ADD COLUMN default_charity_id uuid references charities(id);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_customer_id text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payment_method_id text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS mascot_type text DEFAULT 'original';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS default_charity_id uuid references charities(id);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS notifications_enabled boolean DEFAULT true;
 ```
 
----
+Also enable Row Level Security on all tables:
 
-## Feature 4 — Functional Settings (Frontend)
-**Owner: Justin** | Files: `src/screens/settings/` (new sub-screens)
-
-The settings screen exists but every item is a dead end.
-
-### Tasks
-- [x] `GoalScreen.tsx` — +/- picker, saves via `TrackingService.saveGoal`
-- [x] `StakeScreen.tsx` — same stake picker as onboarding, updates `onboardingStore`
-- [x] `MascotScreen.tsx` — grid of 4 mascots, calls `useUiStore.setCurrentMascot`
-- [x] `navigation/types.ts` updated with `GoalSettings`, `StakeSettings`, `MascotSettings` routes
-- [x] Wire all into `SettingsScreen.tsx` with `navigation.navigate()`
-- [x] Register all 3 in `RootNavigator.tsx`
-- [ ] SQL: `ALTER TABLE profiles ADD COLUMN mascot_type text DEFAULT 'original';`
-  (until then, mascot choice resets on app reload)
-
-### SQL to run
 ```sql
-ALTER TABLE profiles ADD COLUMN mascot_type text DEFAULT 'original';
+-- Profiles: own row only
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Daily records: own records only
+ALTER TABLE daily_records ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users can view own records" ON daily_records FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "users can insert own records" ON daily_records FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "users can update own records" ON daily_records FOR UPDATE USING (auth.uid() = user_id);
+
+-- Transactions: own transactions only
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users can view own transactions" ON transactions FOR SELECT USING (auth.uid() = user_id);
+
+-- Charities: public read
+ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "charities are public" ON charities FOR SELECT USING (true);
 ```
 
+**CHECKPOINT 1 ✓**
+- [ ] Sign in to app — no auth errors
+- [ ] Onboarding completes and saves to profile
+- [ ] Stats screen loads without errors
+- [ ] Supabase Table Editor shows new columns on `profiles`
+
 ---
 
-## Feature 5 — Push Notifications (Backend + Config)
-**Owner: Co-Founder** | Files: `src/services/NotificationService.ts`, `app.json`
+## Step 2 — Screen Time on Real Device
 
-Daily reminders and end-of-day alerts keep users engaged.
+The simulator returns mock data. The entire app is built around this working correctly.
 
-### Tasks
+- [ ] Run on a physical iPhone: `npx expo run:ios --device`
+- [ ] Go through onboarding, set a goal (e.g. 2 hours)
+- [ ] Use your phone normally for a bit, then open Impact Flow
+- [ ] Confirm the screen time shown matches iOS Settings → Screen Time
+- [ ] Test the "deny permission" path: revoke Screen Time access → app should show an instructions screen (build this if missing)
+- [ ] Confirm Apple Pay works on real device (Settings → Payment Method)
+
+**CHECKPOINT 2 ✓**
+- [ ] Impact Flow shows real screen time minutes (not mock 0)
+- [ ] Success/failure state is correct based on actual usage vs goal
+- [ ] Apple Pay sheet appears and completes setup
+- [ ] `payment_method_id` is saved on the profile row in Supabase
+
+---
+
+## Step 3 — Push Notifications
+
+**Files:** `src/services/NotificationService.ts`, `app.json`
+
 - [ ] Install: `npx expo install expo-notifications`
-- [ ] Create `src/services/NotificationService.ts`
-  - `requestPermission()` — ask user for notification permission
-  - `scheduleDailyReminder(hour, minute)` — "Don't forget your screen time goal today"
-  - `scheduleEndOfDay()` — 9pm nightly: "Time to check in. How did today go?"
-  - `cancelAll()` — for when user disables notifications
-- [ ] Add notification permission request to onboarding (after CharityStep)
-- [ ] Wire Settings → "Notifications" toggle → `NotificationService.cancelAll()` / reschedule
-- [ ] Add `notifications_enabled boolean` to profiles table
-
-### SQL to run
-```sql
-ALTER TABLE profiles ADD COLUMN notifications_enabled boolean DEFAULT true;
-```
-
----
-
-## Feature 6 — Dashboard Real Streak + Calendar (Frontend)
-**Owner: Justin** | Files: `src/screens/dashboard/DashboardScreen.tsx`, `src/components/WeekCalendar.tsx`
-
-The streak counter and week calendar still show hardcoded mock data.
-
-### Tasks
-- [x] Fetch last 14 `daily_records` for current user on Dashboard mount
-- [x] Replace `MOCK.weekHistory` with real `['check', 'miss', 'future']` array built from records
-- [x] Replace `MOCK.currentStreak` with real streak count
-- [x] Add `refetch` on app foreground via `AppState` listener
-
----
-
-## Feature 7 — End-of-Day Evaluation Trigger (Backend)
-**Owner: Co-Founder** | Files: `supabase/functions/evaluate-day/`
-
-Right now `evaluateDayResult` only runs when the user opens the Impact Flow. It should run automatically at midnight.
-
-### Tasks
-- [ ] Create Supabase Edge Function `evaluate-day`
-  - Loops all users with a `pending` record for yesterday
-  - Calls same logic as `TrackingService.evaluateDayResult`
-  - Charges failures, logs transactions, sends push notification
-- [ ] Schedule it via Supabase cron (pg_cron): runs daily at 00:05
-  ```sql
-  select cron.schedule('evaluate-daily', '5 0 * * *', 'select net.http_post(...)');
+- [ ] Create `src/services/NotificationService.ts`:
+  ```ts
+  requestPermission()         // ask user on onboarding
+  scheduleDailyReminder()     // morning nudge: "Don't forget your goal today"
+  scheduleEndOfDay()          // 9pm: "Time to check in. How did today go?"
+  cancelAll()                 // for Settings toggle
   ```
-- [ ] Test manually by calling the function from Supabase dashboard
+- [ ] Add permission request as the last onboarding step (after payment setup)
+- [ ] Wire Settings → Push Notifications toggle → `cancelAll()` / reschedule
+- [ ] Add `notifications_enabled` read/write to profile on toggle
+
+**CHECKPOINT 3 ✓**
+- [ ] Onboarding asks for notification permission
+- [ ] A scheduled notification fires at the expected time on real device
+- [ ] Toggling off in Settings cancels future notifications
 
 ---
 
-## Non-Blocking Polish (Do Last)
-**Either person, after features above are merged**
+## Step 4 — End-of-Day Evaluation Cron
 
-| Item | File | Notes |
-|------|------|-------|
-| Help/About screen | `src/screens/settings/AboutScreen.tsx` | Static text, 30 min |
-| Sign In/Up use Poppins font | `SignInScreen.tsx`, `SignUpScreen.tsx` | Add `fontFamily` to styles |
-| Top Offenders real data | `TopOffendersCard.tsx` | Needs ScreenTime per-app API, skip for MVP |
-| Onboarding uses Poppins | All step files | Add `fontFamily` to Text styles |
-| Error boundaries | `App.tsx` | Wrap navigators in ErrorBoundary |
-| Loading skeletons | Dashboard, Stats | Replace `LoadingView` spinner with skeleton UI |
+**Files:** `supabase/functions/evaluate-day/index.ts`
+
+Right now charges only fire when the user manually opens the Impact Flow. This makes the whole commitment mechanic optional. Fix it.
+
+- [ ] Create Edge Function `evaluate-day`:
+  - Fetch all users with a `pending` daily_record for yesterday
+  - Run same logic as `TrackingService.evaluateDayResult`
+  - On failure: call `confirmCharge`, log transaction, send push notification
+  - On success: log transaction as $0, send "Great job!" push notification
+- [ ] Deploy: `supabase functions deploy evaluate-day --no-verify-jwt`
+- [ ] Test manually via Supabase dashboard (invoke with a test user)
+- [ ] Schedule via pg_cron (run in SQL Editor):
+  ```sql
+  select cron.schedule(
+    'evaluate-daily',
+    '5 0 * * *',
+    $$select net.http_post(
+      url := 'https://<project-ref>.supabase.co/functions/v1/evaluate-day',
+      headers := '{"Authorization": "Bearer <service-role-key>"}'::jsonb
+    )$$
+  );
+  ```
+
+**CHECKPOINT 4 ✓**
+- [ ] Manually invoke `evaluate-day` → pending records for yesterday get evaluated
+- [ ] A failure record triggers a real Stripe charge (use test mode card)
+- [ ] Transaction appears in `transactions` table
+- [ ] Push notification is delivered
 
 ---
 
-## Merge Strategy
+## Step 5 — Stripe Production & Charge Flow
 
-```
-main
-├── feature/stripe-backend        (Co-Founder — Feature 1)
-├── feature/payment-screen        (Justin — Feature 2, depends on Feature 1)
-├── feature/charity-selection     (Justin — Feature 3, parallel)
-├── feature/settings-screens      (Justin — Feature 4, parallel)
-├── feature/notifications         (Co-Founder — Feature 5, parallel)
-├── feature/dashboard-real-data   (Justin — Feature 6, parallel)
-└── feature/evaluate-day-cron     (Co-Founder — Feature 7, parallel)
-```
+- [ ] In Stripe Dashboard: activate your account (submit business info)
+- [ ] Replace test keys with live keys in Supabase secrets:
+  ```bash
+  supabase secrets set STRIPE_SECRET_KEY=sk_live_...
+  ```
+- [ ] Re-deploy all three Edge Functions with live key active
+- [ ] Set billing statement descriptor in Stripe → Settings → Business → Statement descriptor (shows "SCROLI" on card statements)
+- [ ] Enable Stripe automatic receipts: Stripe → Settings → Emails → Successful payments
+- [ ] Run one real end-to-end charge on a real card for $1 stake
+- [ ] Handle charge failure: if card declines, show user "Your card was declined. Update your payment method." and flag their account
 
-**Rule:** Each feature branch only touches its own screen files + one service file. No two branches touch the same file except `navigation/types.ts` and `RootNavigator.tsx` — coordinate those additions before branching.
+**CHECKPOINT 5 ✓**
+- [ ] Real card charged successfully in live mode
+- [ ] Stripe Dashboard shows the transaction
+- [ ] User receives email receipt from Stripe
+- [ ] Declined card shows error in app, not a crash
 
 ---
 
-## Current State Summary
+## Step 6 — Onboarding Guardrails & Error States
 
-| Layer | Status |
-|-------|--------|
-| Auth (sign in/up/out) | ✅ Done |
-| Onboarding (3 steps) | ✅ Done |
-| Dashboard UI + screen time | ✅ Done |
-| Stats + Profile (real data) | ✅ Done |
-| Impact Flow (real data) | ✅ Done |
-| TrackingService | ✅ Done |
-| Supabase schema (6 tables) | ✅ Done |
-| Branding (coral, Poppins, wave logo) | ✅ Done |
-| Stripe backend | ❌ Feature 1 |
-| Payment setup screen | ❌ Feature 2 |
-| Charity selection | ✅ Feature 3 (SQL migration pending) |
-| Functional settings | ✅ Feature 4 (SQL migration pending) |
-| Push notifications | ❌ Feature 5 |
-| Dashboard real streak/calendar | ✅ Feature 6 |
-| End-of-day cron | ❌ Feature 7 |
+- [ ] Block onboarding completion if no payment method added (disable "Finish" button, show "Add a payment method to continue")
+- [ ] Dashboard: show banner "Add a payment method — your stake isn't active yet" if `payment_method_id` is null
+- [ ] All screens: replace bare loading spinner with a skeleton or named loading state
+- [ ] Stats / Profile: show a friendly empty state for new users with 0 records
+- [ ] Network offline: show toast "No internet connection" instead of a silent crash
+- [ ] Impact Flow: graceful error if ScreenTime API fails (show "Couldn't load screen time data")
+
+**CHECKPOINT 6 ✓**
+- [ ] New user signup → can't finish onboarding without payment method
+- [ ] Brand new account → Stats and Profile show empty state (not a blank white screen)
+- [ ] Turn on Airplane Mode → app shows "No internet connection", doesn't crash
+
+---
+
+## Step 7 — Legal Pages
+
+Required by App Store and by law when charging users money.
+
+- [ ] Write a Privacy Policy (can use a generator like Termly or Iubenda)
+  - Must cover: data collected (email, screen time usage, payment info), Stripe as payment processor, Supabase as data store, how to delete account
+  - **Important:** explicitly state that screen time data never leaves the device
+- [ ] Write Terms of Service
+  - Must cover: what the charge is for, no refunds (or your refund policy), how to cancel, minimum age (18+)
+- [ ] Host both at a URL (Notion public page, GitHub Pages, or a simple landing page works)
+- [ ] Wire Settings → "Terms of Service" → open URL in browser
+- [ ] Wire Settings → "Privacy & Security" → open URL in browser
+- [ ] Add "By continuing you agree to our Terms of Service and Privacy Policy" with tappable links on the payment onboarding step
+
+**CHECKPOINT 7 ✓**
+- [ ] Both pages are live at a real URL
+- [ ] Settings rows open the correct pages
+- [ ] Onboarding payment step shows the legal copy with working links
+
+---
+
+## Step 8 — App Store Assets
+
+- [ ] App icon: 1024×1024 PNG, no alpha channel, no rounded corners (App Store adds them)
+- [ ] Splash screen: centered wave logo on cream (#F5F6FA) background
+- [ ] Screenshots: capture on iPhone 6.7" and 6.1" (required sizes)
+  - Suggested screens to capture: Dashboard, Impact Flow (success), Impact Flow (failure), Stats, Profile
+- [ ] App Store listing copy:
+  - Name: Scroli
+  - Subtitle (30 chars): "Put money on your screen time"
+  - Description: explain the commitment mechanic, charity angle, how charging works
+  - Keywords: screen time, digital wellness, accountability, focus, charity
+- [ ] Age rating: select 17+ (financial transactions + "simulated gambling" category may apply)
+
+**CHECKPOINT 8 ✓**
+- [ ] Icon appears correctly in Expo config and on device
+- [ ] Splash screen shows on cold launch
+- [ ] All required screenshot sizes ready
+
+---
+
+## Step 9 — TestFlight Beta
+
+- [ ] Build: `eas build --platform ios --profile preview`
+- [ ] Submit to TestFlight: `eas submit --platform ios`
+- [ ] Internal testers (you + co-founder): install and run through the full flow on real devices
+- [ ] Fix any issues found during internal testing
+- [ ] External beta: invite 10–20 people from target audience
+  - Full flow: sign up → onboarding → set goal → use phone → check in → get charged or not
+  - Collect feedback on: onboarding clarity, impact flow, charge notification timing
+- [ ] Fix critical issues from beta feedback
+
+**CHECKPOINT 9 ✓**
+- [ ] Full flow works end-to-end for an external user on a real device
+- [ ] Charges fire correctly overnight via cron
+- [ ] No crashes reported in Sentry (set up Sentry before this step if possible)
+
+---
+
+## Step 10 — App Store Submission
+
+- [ ] Add Sentry for crash reporting: `npx expo install @sentry/react-native`
+- [ ] Production build: `eas build --platform ios --profile production`
+- [ ] Submit for review: `eas submit --platform ios`
+- [ ] App Store Connect: fill in all metadata, upload screenshots, set pricing (free)
+- [ ] Review notes for Apple: explain what the app does and why Stripe charges are legitimate (not in-app purchases, not gambling — it's a commitment/accountability tool)
+
+**Watch for these Apple rejection reasons:**
+| Risk | What to say in review notes |
+|------|---------------------------|
+| Guideline 3.1.1 (in-app purchases) | Charges are a voluntary commitment made by the user, not a subscription or digital good |
+| Guideline 1.4.3 (gambling) | No chance element — user sets their own stake and controls their behavior |
+| Screen Time API usage | Data is processed on-device only; no screen time data is transmitted to servers |
+
+---
+
+## Post-Launch (After v1 Ships)
+
+| Item | Priority |
+|------|----------|
+| Analytics (Amplitude or Mixpanel) | High — need funnel data to improve onboarding |
+| Charge failure recovery flow | High — card declines need a clear path to fix |
+| Per-app breakdown in Stats | Medium — requires `applicationActivities` Screen Time API |
+| Android support | Medium — separate Digital Wellbeing API |
+| Weekly email digest | Low |
+| Streak freeze (paid feature) | Low |
+| Admin dashboard (Retool or Supabase Studio) | Low |

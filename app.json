@@ -29,7 +29,14 @@
     },
     "plugins": [
       "./plugins/withScreenTime",
-      "expo-font"
+      "expo-font",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.anonymous.scroli",
+          "enableGooglePay": false
+        }
+      ]
     ]
   }
 }
